@@ -1,13 +1,14 @@
 # This workflow build and push a Docker container to Google Artifact Registry
-# and deploy it on Cloud Run when a PR has been approved by a reviewer.
+# and deploy it on Cloud Run when a PR to the `release` PR is closed.
+#GCP needs a repo 
+name: 'Build and Deploy PROD to  Cloud Run'
 
-name: 'Build and Deploy to Cloud Run'
 on:
-  pull_request_review:
-    types: [submitted]
-  push:
-    branches:
-      - main  # Adjust if you use a different branch
+    pull_request:
+      branches:
+        - release
+      types:
+        - closed
 
 env:
 
@@ -22,11 +23,10 @@ jobs:
   
   deploy:
     runs-on: 'ubuntu-latest'
-    
-    if: github.event.pull_request.merged == 'true'
+
     
     environment:
-      name: dev
+      name: prod
 
     permissions:
       contents: 'read'
@@ -35,28 +35,25 @@ jobs:
     steps:
       - name: 'Checkout'
         uses: 'actions/checkout@v4'
-
       - id: 'auth'
         name: 'Authenticate to Google Cloud'
         uses: 'google-github-actions/auth@v2'
         with:
           credentials_json: '${{ env.GCP_CREDENTIALS }}'
 
-      - name: Generate .env.dev file
+      - name: Generate .env.prod file
         run: |
-          echo "VITE_CLIENT_ID = ${{ secrets.VITE_CLIENT_ID }}" > .env.dev
-          echo "VITE_SEARCH_ENDPOINT = ${{ secrets.VITE_SEARCH_ENDPOINT }}" >> .env.dev
-          echo "VITE_VOCAB_ENDPOINT= ${{ secrets.VITE_VOCAB_ENDPOINT }}" >> .env.dev
-      
+          echo "VITE_CLIENT_ID = ${{ secrets.VITE_CLIENT_ID }}" > .env.prod
+          echo "VITE_SEARCH_ENDPOINT = ${{ secrets.VITE_SEARCH_ENDPOINT }}" >> .env.prod
+          echo "VITE_VOCAB_ENDPOINT= ${{ secrets.VITE_VOCAB_ENDPOINT }}" >> .env.prod
       - name: 'Docker Auth'
         run: |-
           gcloud auth configure-docker '${{ env.REGION }}-docker.pkg.dev'
-          
-      - name: 'Build Docker Image' # New step to build the image
 
+      - name: 'Build Docker Image' # New step to build the image
         run: |-
           DOCKER_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-          docker build -t "${DOCKER_TAG}" --build-arg ENV=dev .
+          docker build -t "${DOCKER_TAG}" .
 
       - name: 'Push Docker Image'
         run: |-

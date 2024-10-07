@@ -1,13 +1,15 @@
 # This workflow build and push a Docker container to Google Artifact Registry
-# and deploy it on Cloud Run when a PR has been approved by a reviewer.
+# and deploy it on Cloud Run when a PR to the `release` branch is made.
 
-name: 'Build and Deploy to Cloud Run'
+name: 'Build and Deploy QA to Cloud Run'
+
 on:
-  pull_request_review:
-    types: [submitted]
-  push:
+  pull_request:
     branches:
-      - main  # Adjust if you use a different branch
+      - release
+    types:
+      - closed
+
 
 env:
 
@@ -22,17 +24,16 @@ jobs:
   
   deploy:
     runs-on: 'ubuntu-latest'
-    
-    if: github.event.pull_request.merged == 'true'
-    
+
     environment:
-      name: dev
+      name: qa
 
     permissions:
       contents: 'read'
       id-token: 'write'
 
     steps:
+     
       - name: 'Checkout'
         uses: 'actions/checkout@v4'
 
@@ -42,21 +43,20 @@ jobs:
         with:
           credentials_json: '${{ env.GCP_CREDENTIALS }}'
 
-      - name: Generate .env.dev file
+      - name: Generate .env.qa file
         run: |
-          echo "VITE_CLIENT_ID = ${{ secrets.VITE_CLIENT_ID }}" > .env.dev
-          echo "VITE_SEARCH_ENDPOINT = ${{ secrets.VITE_SEARCH_ENDPOINT }}" >> .env.dev
-          echo "VITE_VOCAB_ENDPOINT= ${{ secrets.VITE_VOCAB_ENDPOINT }}" >> .env.dev
-      
+          echo "VITE_CLIENT_ID = ${{ secrets.VITE_CLIENT_ID }}" > .env.qa
+          echo "VITE_SEARCH_ENDPOINT = ${{ secrets.VITE_SEARCH_ENDPOINT }}" >> .env.qa
+          echo "VITE_VOCAB_ENDPOINT= ${{ secrets.VITE_VOCAB_ENDPOINT }}" >> .env.qa
+
       - name: 'Docker Auth'
         run: |-
           gcloud auth configure-docker '${{ env.REGION }}-docker.pkg.dev'
-          
-      - name: 'Build Docker Image' # New step to build the image
 
+      - name: 'Build Docker Image' # New step to build the image
         run: |-
           DOCKER_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.SERVICE }}/${{ env.IMAGE_NAME }}:${{ github.sha }}"
-          docker build -t "${DOCKER_TAG}" --build-arg ENV=dev .
+          docker build -t "${DOCKER_TAG}" --build-arg ENV=qa .
 
       - name: 'Push Docker Image'
         run: |-
